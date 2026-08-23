@@ -22,6 +22,7 @@ enum ReservationStatus {
 
 model Field {
   id                String        @id @default(cuid())
+  ownerId           String        @default("system")
   name              String
   type              FieldType
   pricePerHour      Float
@@ -36,6 +37,7 @@ model Field {
 
 model Reservation {
   id                     String            @id @default(cuid())
+  ownerId                String?           @default("system")
   fieldId                String
   field                  Field             @relation(fields: [fieldId], references: [id], onDelete: Cascade)
   date                   String            // Formato YYYY-MM-DD
