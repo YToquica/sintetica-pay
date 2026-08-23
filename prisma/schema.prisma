@@ -1,0 +1,59 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum FieldType {
+  FUTBOL_5
+  FUTBOL_7
+  FUTBOL_11
+}
+
+enum ReservationStatus {
+  ABONADA_50
+  COMPLETADA_100
+  CANCELADA
+}
+
+model Field {
+  id                String        @id @default(cuid())
+  name              String
+  type              FieldType
+  pricePerHour      Float
+  depositPercentage Float         @default(50.0)
+  image             String
+  dimensions        String
+  grassType         String
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  reservations      Reservation[]
+}
+
+model Reservation {
+  id                     String            @id @default(cuid())
+  fieldId                String
+  field                  Field             @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  date                   String            // Formato YYYY-MM-DD
+  startTime              String            // Formato HH:00
+  endTime                String            // Formato HH:00
+  customerName           String
+  customerPhone          String
+  customerEmail          String
+  totalPrice             Float
+  depositAmount          Float
+  remainingAmount        Float
+  status                 ReservationStatus @default(ABONADA_50)
+  paymentMethodDeposit   String            // Nequi, PSE, Tarjeta, Mercado Pago
+  paymentMethodRemaining String?           // Efectivo en Cancha, Datáfono en Sitio
+  qrCodeValue            String            @unique
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  // Índice único para asegurar que NUNCA exista doble reserva en la misma cancha, fecha y horario
+  @@unique([fieldId, date, startTime])
+}
