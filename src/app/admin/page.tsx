@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import FieldFormModal from '@/components/FieldFormModal';
 import { createClient } from '@/lib/supabase/client';
-import { getStoredReservations, updateReservationPayment, cancelReservationInStore, saveReservation, generateReservationId, MOCK_FIELDS } from '@/lib/store';
+import { getStoredReservations, updateReservationPayment, cancelReservationInStore, saveReservation, MOCK_FIELDS } from '@/lib/store';
 import { Reservation, Field, PaymentMethodRemaining } from '@/lib/types';
 import { User as SupabaseUser } from '@supabase/supabase-js';
-import { DollarSign, ShieldCheck, CheckCircle2, Clock, Calendar, User, Phone, Search, AlertCircle, Plus, Check, X, Lock, Trophy, Edit, Trash2, Layers, LayoutGrid } from 'lucide-react';
+import { DollarSign, ShieldCheck, CheckCircle2, Clock, Calendar, User, Phone, Search, AlertCircle, Plus, Check, X, Lock, Trophy, Edit, Trash2, Layers, LayoutGrid, Wrench, Info } from 'lucide-react';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -24,7 +24,7 @@ export default function AdminPage() {
   const [fieldModalOpen, setFieldModalOpen] = useState<boolean>(false);
   const [editingField, setEditingField] = useState<Field | null>(null);
 
-  // Reservations State
+  // Reservations State (Supabase + Local fallback)
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [filterStatus, setFilterStatus] = useState<string>('TODAS');
@@ -34,12 +34,12 @@ export default function AdminPage() {
   const [collectingReservation, setCollectingReservation] = useState<Reservation | null>(null);
   const [remainingPaymentMethod, setRemainingPaymentMethod] = useState<PaymentMethodRemaining>('Efectivo en Cancha');
 
-  // State for manual booking modal
-  const [showManualModal, setShowManualModal] = useState<boolean>(false);
-  const [manualFieldId, setManualFieldId] = useState<string>('');
-  const [manualTime, setManualTime] = useState<string>('19:00');
-  const [manualCustomer, setManualCustomer] = useState<string>('');
-  const [manualPhone, setManualPhone] = useState<string>('');
+  // State for Admin Schedule Override / Block Modal
+  const [showBlockModal, setShowBlockModal] = useState<boolean>(false);
+  const [blockFieldId, setBlockFieldId] = useState<string>('');
+  const [blockTime, setBlockTime] = useState<string>('19:00');
+  const [blockReason, setBlockReason] = useState<string>('Mantenimiento / Reparación de Cancha');
+  const [blockCustomerName, setBlockCustomerName] = useState<string>('');
 
   useEffect(() => {
     const supabase = createClient();
@@ -48,12 +48,12 @@ export default function AdminPage() {
         router.push('/login');
       } else {
         setUser(data.user);
-        setReservations(getStoredReservations());
         fetchFields();
+        fetchReservations(selectedDate);
         setAuthChecking(false);
       }
     });
-  }, [router]);
+  }, [router, selectedDate]);
 
   const fetchFields = async () => {
     setFieldsLoading(true);
@@ -62,13 +62,38 @@ export default function AdminPage() {
       if (res.ok) {
         const data = await res.json();
         setFields(data);
-        if (data.length > 0) setManualFieldId(data[0].id);
+        if (data.length > 0) setBlockFieldId(data[0].id);
       }
     } catch (e) {
       console.error('Error fetching fields:', e);
       setFields(MOCK_FIELDS);
     } finally {
       setFieldsLoading(false);
+    }
+  };
+
+  const fetchReservations = async (dateStr: string) => {
+    try {
+      const res = await fetch(`/api/reservations?date=${dateStr}`);
+      if (res.ok) {
+        const data = await res.json();
+        // Merge Supabase DB reservations with local storage reservations
+        const localData = getStoredReservations().filter(r => r.date === dateStr);
+        const combined = [...data];
+
+        localData.forEach((lr: Reservation) => {
+          if (!combined.some(dbR => dbR.id === lr.id)) {
+            combined.push(lr);
+          }
+        });
+
+        setReservations(combined);
+      } else {
+        setReservations(getStoredReservations().filter(r => r.date === dateStr));
+      }
+    } catch (e) {
+      console.error('Error fetching reservations from Supabase:', e);
+      setReservations(getStoredReservations().filter(r => r.date === dateStr));
     }
   };
 
@@ -85,10 +110,6 @@ export default function AdminPage() {
         alert('Error de conexión al eliminar cancha.');
       }
     }
-  };
-
-  const refreshReservations = () => {
-    setReservations(getStoredReservations());
   };
 
   const formatCOP = (val: number) => {
@@ -129,51 +150,69 @@ export default function AdminPage() {
   const totalRemainingCollected = dateReservations.reduce((sum, r) => sum + (r.status === 'COMPLETADA_100' ? r.remainingAmount : 0), 0);
   const totalProjectedRevenue = totalDepositsCollected + totalRemainingPending + totalRemainingCollected;
 
-  const handleConfirmRemainingPayment = () => {
+  const handleConfirmRemainingPayment = async () => {
     if (!collectingReservation) return;
+
+    try {
+      await fetch(`/api/reservations/${collectingReservation.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentMethodRemaining: remainingPaymentMethod,
+          status: 'COMPLETADA_100',
+        }),
+      });
+    } catch (e) {
+      console.error('Error updating payment in Supabase:', e);
+    }
+
     updateReservationPayment(collectingReservation.id, remainingPaymentMethod);
     setCollectingReservation(null);
-    refreshReservations();
+    fetchReservations(selectedDate);
   };
 
   const handleCancelReservation = (id: string) => {
     if (confirm('¿Estás seguro de cancelar esta reserva?')) {
       cancelReservationInStore(id);
-      refreshReservations();
+      fetchReservations(selectedDate);
     }
   };
 
-  const handleCreateManualBooking = (e: React.FormEvent) => {
+  const handleCreateBlock = async (e: React.FormEvent) => {
     e.preventDefault();
-    const targetField = fields.find(f => f.id === manualFieldId) || MOCK_FIELDS[0];
-    const resId = generateReservationId();
-    const endHour = parseInt(manualTime.split(':')[0]) + 1;
+    const targetField = fields.find(f => f.id === blockFieldId) || MOCK_FIELDS[0];
+    const endHour = parseInt(blockTime.split(':')[0]) + 1;
+    const endTimeStr = `${endHour.toString().padStart(2, '0')}:00`;
+    const fullReason = blockCustomerName ? `${blockReason} (${blockCustomerName})` : blockReason;
 
-    const newRes: Reservation = {
-      id: resId,
-      fieldId: targetField.id,
-      fieldName: targetField.name,
-      fieldType: targetField.type,
-      date: selectedDate,
-      startTime: manualTime,
-      endTime: `${endHour.toString().padStart(2, '0')}:00`,
-      customerName: manualCustomer || 'Cliente Presencial (Manual)',
-      customerPhone: manualPhone || 'N/A',
-      customerEmail: user?.email || 'admin@cancha.com',
-      totalPrice: targetField.pricePerHour,
-      depositAmount: targetField.pricePerHour / 2,
-      remainingAmount: targetField.pricePerHour / 2,
-      status: 'ABONADA_50',
-      paymentMethodDeposit: 'Nequi',
-      createdAt: new Date().toISOString(),
-      qrCodeValue: `MANUAL-${resId}`
-    };
+    try {
+      // Post to Supabase API so clients immediately see the block!
+      const res = await fetch('/api/reservations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fieldId: targetField.id,
+          date: selectedDate,
+          startTime: blockTime,
+          endTime: endTimeStr,
+          customerName: fullReason,
+          customerPhone: 'N/A (Bloqueo Admin)',
+          customerEmail: user?.email || 'admin@cancha.com',
+          paymentMethodDeposit: 'Bloqueo Admin',
+        }),
+      });
 
-    saveReservation(newRes);
-    setShowManualModal(false);
-    setManualCustomer('');
-    setManualPhone('');
-    refreshReservations();
+      if (!res.ok) {
+        const errorData = await res.json();
+        alert(errorData.error || 'Error al guardar el bloqueo en Supabase');
+      }
+    } catch (err) {
+      console.error('Error creating block in Supabase:', err);
+    }
+
+    setShowBlockModal(false);
+    setBlockCustomerName('');
+    fetchReservations(selectedDate);
   };
 
   return (
@@ -182,6 +221,17 @@ export default function AdminPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 space-y-6">
         
+        {/* Informative Role Banner */}
+        <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl border border-slate-800 flex items-start gap-3 text-xs shadow-sm">
+          <Info className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <span className="font-bold text-white block">Rol del Administrador vs. Cliente</span>
+            <p className="text-slate-300 leading-relaxed">
+              Los <strong>clientes reservan y pagan el 50% de abono online desde la web pública</strong>. Desde este panel administras el <strong>cobro del 50% restante en efectivo/sitio</strong> cuando los jugadores llegan a la cancha y gestionas bloqueos por mantenimiento o llamadas.
+            </p>
+          </div>
+        </div>
+
         {/* Header & Tabs Navigation */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div>
@@ -189,10 +239,10 @@ export default function AdminPage() {
               <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
                 Panel Privado • {user?.email}
               </span>
-              <span className="text-xs text-slate-500">Gestión Multi-Establecimiento</span>
+              <span className="text-xs text-slate-500">Gestión de Caja & Canchas</span>
             </div>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight mt-1">
-              Dashboard de Control de Canchas
+              Control de Caja & Reservas (50/50)
             </h1>
           </div>
 
@@ -238,7 +288,7 @@ export default function AdminPage() {
                 <div className="text-2xl font-extrabold text-emerald-600">
                   {formatCOP(totalDepositsCollected)}
                 </div>
-                <span className="text-[11px] text-slate-400 block">Dinero ya asegurado en cuenta</span>
+                <span className="text-[11px] text-slate-400 block">Abonos pagados por clientes en la web</span>
               </div>
 
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1">
@@ -249,7 +299,7 @@ export default function AdminPage() {
                 <div className="text-2xl font-extrabold text-amber-600">
                   {formatCOP(totalRemainingPending)}
                 </div>
-                <span className="text-[11px] text-slate-400 block">Por cobrar hoy al llegar jugadores</span>
+                <span className="text-[11px] text-slate-400 block">Pendiente por cobrar en caja presencial</span>
               </div>
 
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1">
@@ -306,7 +356,7 @@ export default function AdminPage() {
               </div>
 
               <div className="flex items-center gap-2 w-full sm:w-auto">
-                <div className="relative w-full sm:w-64">
+                <div className="relative w-full sm:w-60">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                   <input
                     type="text"
@@ -317,12 +367,13 @@ export default function AdminPage() {
                   />
                 </div>
 
+                {/* Admin Schedule Override Button */}
                 <button
-                  onClick={() => setShowManualModal(true)}
-                  className="bg-slate-900 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-3 rounded-xl flex items-center gap-1 transition-colors shadow-sm shrink-0"
+                  onClick={() => setShowBlockModal(true)}
+                  className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2 px-3 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm shrink-0"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>Reserva Manual</span>
+                  <Wrench className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Bloquear Horario</span>
                 </button>
               </div>
             </div>
@@ -345,7 +396,7 @@ export default function AdminPage() {
                     {filteredReservations.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="p-8 text-center text-slate-400 text-sm">
-                          No hay reservas registradas para esta fecha o filtro.
+                          No hay reservas ni bloqueos registrados para esta fecha o filtro.
                         </td>
                       </tr>
                     ) : (
@@ -360,8 +411,8 @@ export default function AdminPage() {
                           </td>
 
                           <td className="p-4 font-semibold text-slate-900">
-                            {r.fieldName}
-                            <span className="text-[10px] text-slate-400 block font-normal">{r.fieldType}</span>
+                            {r.fieldName || fields.find(f => f.id === r.fieldId)?.name || 'Cancha'}
+                            <span className="text-[10px] text-slate-400 block font-normal">{r.fieldType || fields.find(f => f.id === r.fieldId)?.type}</span>
                           </td>
 
                           <td className="p-4">
@@ -622,24 +673,32 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Modal for Manual Booking / Lock Slot */}
-      {showManualModal && (
+      {/* Modal for Admin Schedule Block / Override */}
+      {showBlockModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={handleCreateManualBooking} className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in duration-200">
+          <form onSubmit={handleCreateBlock} className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in duration-200">
+            
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-900 text-base">Reserva Manual / Bloqueo de Horario</h3>
-              <button type="button" onClick={() => setShowManualModal(false)} className="text-slate-400 hover:text-slate-600">
+              <div className="flex items-center gap-2">
+                <Wrench className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-slate-900 text-base">Bloquear Horario en Agenda</h3>
+              </div>
+              <button type="button" onClick={() => setShowBlockModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Usa esta función únicamente para deshabilitar un horario debido a reparaciones, llamadas telefónicas o torneos locales.
+            </p>
+
             <div className="space-y-3 text-xs">
               <div>
-                <label className="font-medium text-slate-700 block mb-1">Cancha</label>
+                <label className="font-semibold text-slate-700 block mb-1">Cancha a Bloquear</label>
                 <select
-                  value={manualFieldId}
-                  onChange={(e) => setManualFieldId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800"
+                  value={blockFieldId}
+                  onChange={(e) => setBlockFieldId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 >
                   {fields.map(f => (
                     <option key={f.id} value={f.id}>{f.name} ({f.type})</option>
@@ -648,11 +707,11 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="font-medium text-slate-700 block mb-1">Hora de Inicio</label>
+                <label className="font-semibold text-slate-700 block mb-1">Hora de Inicio (1 Hora)</label>
                 <select
-                  value={manualTime}
-                  onChange={(e) => setManualTime(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800"
+                  value={blockTime}
+                  onChange={(e) => setBlockTime(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 >
                   {['16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00'].map(t => (
                     <option key={t} value={t}>{t}</option>
@@ -661,25 +720,26 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="font-medium text-slate-700 block mb-1">Nombre / Identificación del Grupo</label>
-                <input
-                  type="text"
-                  placeholder="Ej: Torneo Vecinal / Partido Don José"
-                  value={manualCustomer}
-                  onChange={(e) => setManualCustomer(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800"
-                  required
-                />
+                <label className="font-semibold text-slate-700 block mb-1">Motivo del Bloqueo</label>
+                <select
+                  value={blockReason}
+                  onChange={(e) => setBlockReason(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                >
+                  <option value="Mantenimiento / Reparación de Cancha">Mantenimiento / Reparación de Cancha</option>
+                  <option value="Reserva Telefónica / WhatsApp">Reserva Telefónica / WhatsApp</option>
+                  <option value="Torneo Local / Escuela de Fútbol">Torneo Local / Escuela de Fútbol</option>
+                </select>
               </div>
 
               <div>
-                <label className="font-medium text-slate-700 block mb-1">Teléfono Contacto</label>
+                <label className="font-semibold text-slate-700 block mb-1">Detalles Adicionales (Opcional)</label>
                 <input
                   type="text"
-                  placeholder="+57 300 000 0000"
-                  value={manualPhone}
-                  onChange={(e) => setManualPhone(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800"
+                  placeholder="Ej: Pintura de líneas / Llamada Don Pedro"
+                  value={blockCustomerName}
+                  onChange={(e) => setBlockCustomerName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
               </div>
             </div>
@@ -688,7 +748,7 @@ export default function AdminPage() {
               type="submit"
               className="w-full bg-slate-900 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-colors shadow-md text-xs"
             >
-              Registrar Reserva en Agenda
+              Bloquear Horario en la Web
             </button>
           </form>
         </div>

@@ -1,22 +1,35 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import FieldCard from '@/components/FieldCard';
 import BookingFormModal from '@/components/BookingFormModal';
 import TicketQRModal from '@/components/TicketQRModal';
 import { MOCK_FIELDS } from '@/lib/store';
 import { Field, Reservation } from '@/lib/types';
-import { ShieldCheck, CalendarCheck, Zap, Trophy, PhoneCall } from 'lucide-react';
+import { ShieldCheck, CalendarCheck, Zap, Trophy } from 'lucide-react';
 
 export default function HomePage() {
+  const [fields, setFields] = useState<Field[]>(MOCK_FIELDS);
   const [selectedField, setSelectedField] = useState<Field | null>(null);
   const [confirmedReservation, setConfirmedReservation] = useState<Reservation | null>(null);
   const [filterType, setFilterType] = useState<string>('TODAS');
 
+  useEffect(() => {
+    // Fetch available synthetic fields from API
+    fetch('/api/fields')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setFields(data);
+        }
+      })
+      .catch(err => console.error('Error cargando canchas desde la API:', err));
+  }, []);
+
   const filteredFields = filterType === 'TODAS'
-    ? MOCK_FIELDS
-    : MOCK_FIELDS.filter(f => f.type === filterType);
+    ? fields
+    : fields.filter(f => f.type === filterType);
 
   return (
     <div className="min-h-screen bg-slate-100/70 text-slate-900 flex flex-col font-sans">

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Calendar, ShieldCheck, LayoutDashboard, Trophy, LogOut, UserCheck } from 'lucide-react';
+import { Calendar, ShieldCheck, LayoutDashboard, Trophy, LogOut } from 'lucide-react';
 import { User } from '@supabase/supabase-js';
 
 export default function Navbar() {
@@ -41,7 +41,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           
           {/* Logo & Brand Identity */}
-          <Link href="/" className="flex items-center gap-3 group">
+          <Link href={user ? '/admin' : '/'} className="flex items-center gap-3 group">
             <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-md group-hover:bg-emerald-500 transition-colors">
               <Trophy className="w-6 h-6" />
             </div>
@@ -50,71 +50,62 @@ export default function Navbar() {
                 Sintética<span className="text-emerald-400">Pay</span>
               </span>
               <span className="text-xs text-slate-400 block -mt-1 font-normal">
-                Gestión de Canchas & Abono 50%
+                {user ? 'Panel Privado de Administrador' : 'Gestión de Canchas & Abono 50%'}
               </span>
             </div>
           </Link>
 
-          {/* Navigation Links */}
+          {/* Navigation Links - Tailored for Admin vs Customer */}
           <nav className="flex items-center gap-2 sm:gap-4">
-            <Link
-              href="/"
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                pathname === '/'
-                  ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/60'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Calendar className="w-4 h-4" />
-              <span>Reservar Cancha</span>
-            </Link>
-
             {user ? (
+              // ADMIN NAVBAR: Only Dashboard link, no "Reservar Cancha"
               <Link
                 href="/admin"
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-bold transition-all ${
                   pathname === '/admin'
-                    ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/60'
+                    ? 'bg-emerald-950/90 text-emerald-400 border border-emerald-800/80'
                     : 'text-slate-300 hover:text-white hover:bg-slate-800'
                 }`}
               >
                 <LayoutDashboard className="w-4 h-4" />
-                <span>Panel Dueño (Caja)</span>
+                <span>Panel de Control (Caja & Canchas)</span>
               </Link>
             ) : (
+              // CUSTOMER NAVBAR: Only Public Booking link
               <Link
-                href="/login"
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  pathname === '/login'
-                    ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/60'
+                href="/"
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-bold transition-all ${
+                  pathname === '/'
+                    ? 'bg-emerald-950/90 text-emerald-400 border border-emerald-800/80'
                     : 'text-slate-300 hover:text-white hover:bg-slate-800'
                 }`}
               >
-                <UserCheck className="w-4 h-4" />
-                <span>Acceso Dueño</span>
+                <Calendar className="w-4 h-4" />
+                <span>Reservar Cancha</span>
               </Link>
             )}
           </nav>
 
-          {/* User Profile / Logout Section */}
+          {/* Right Section: Admin Profile/Logout vs Customer Badge */}
           <div className="flex items-center gap-3">
             {user ? (
-              <div className="flex items-center gap-3 bg-slate-800/80 border border-slate-700/60 pl-3 pr-2 py-1.5 rounded-full">
-                <span className="text-xs text-slate-300 max-w-[140px] truncate hidden sm:inline font-medium">
+              <div className="flex items-center gap-3 bg-slate-800/90 border border-slate-700/80 pl-3.5 pr-2 py-1.5 rounded-full shadow-sm">
+                <span className="text-xs text-emerald-400 font-semibold max-w-[150px] truncate hidden sm:inline">
                   {user.email}
                 </span>
                 <button
                   onClick={handleLogout}
-                  className="bg-slate-700 hover:bg-red-600 text-white p-1.5 rounded-full transition-colors"
+                  className="bg-slate-700 hover:bg-red-600 text-white p-1.5 rounded-full transition-colors flex items-center gap-1.5 px-3"
                   title="Cerrar Sesión"
                 >
+                  <span className="text-xs font-medium hidden md:inline">Salir</span>
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
               </div>
             ) : (
-              <div className="hidden md:flex items-center gap-2 text-xs bg-slate-800/80 border border-slate-700/60 px-3 py-1.5 rounded-full text-slate-300">
+              <div className="hidden md:flex items-center gap-2 text-xs bg-slate-800/80 border border-slate-700/60 px-3.5 py-1.5 rounded-full text-slate-300">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Sistema 50% Online / 50% Sitio</span>
+                <span>Abono 50% Online / 50% en Sitio</span>
               </div>
             )}
           </div>

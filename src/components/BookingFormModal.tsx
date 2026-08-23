@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Field, Reservation, PaymentMethodDeposit } from '@/lib/types';
 import { getStoredReservations, saveReservation, generateReservationId } from '@/lib/store';
 import { X, Calendar, Clock, User, Phone, Mail, CreditCard, ShieldCheck, Check, AlertCircle } from 'lucide-react';
@@ -25,6 +25,8 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [customerEmail, setCustomerEmail] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodDeposit>('Nequi');
+  
+  const [dbReservations, setDbReservations] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
 
@@ -39,15 +41,33 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
     }).format(val);
   };
 
-  // Check if slot is occupied
-  const existingReservations = getStoredReservations();
+  // Fetch reservations from API (Supabase) when selected date changes
+  useEffect(() => {
+    fetch(`/api/reservations?date=${selectedDate}`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setDbReservations(data);
+        }
+      })
+      .catch(err => console.error('Error fetching reservations:', err));
+  }, [selectedDate]);
+
+  // Check if slot is occupied in Supabase DB or Local Store
+  const localReservations = getStoredReservations();
   const isTimeOccupied = (time: string) => {
-    return existingReservations.some(
+    const isOccupiedLocal = localReservations.some(
       r => r.fieldId === field.id && r.date === selectedDate && r.startTime === time && r.status !== 'CANCELADA'
     );
+
+    const isOccupiedDb = dbReservations.some(
+      r => r.fieldId === field.id && r.date === selectedDate && r.startTime === time && r.status !== 'CANCELADA'
+    );
+
+    return isOccupiedLocal || isOccupiedDb;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -57,18 +77,41 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
     }
 
     if (isTimeOccupied(selectedTime)) {
-      setErrorMsg(`El horario ${selectedTime} del ${selectedDate} ya fue apartado. Elige otro horario.`);
+      setErrorMsg(`El horario ${selectedTime} del ${selectedDate} ya fue apartado o está en mantenimiento. Elige otro horario.`);
       return;
     }
 
     setIsProcessing(true);
 
-    // Simulate 50% deposit payment gateway confirmation
-    setTimeout(() => {
-      const resId = generateReservationId();
+    try {
       const endHourNum = parseInt(selectedTime.split(':')[0]) + 1;
       const endTimeStr = `${endHourNum.toString().padStart(2, '0')}:00`;
 
+      // 1. Post reservation to Supabase API
+      const res = await fetch('/api/reservations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fieldId: field.id,
+          date: selectedDate,
+          startTime: selectedTime,
+          endTime: endTimeStr,
+          customerName,
+          customerPhone,
+          customerEmail,
+          paymentMethodDeposit: paymentMethod,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Error al guardar la reserva');
+      }
+
+      const createdRes = await res.json();
+
+      // 2. Save locally for fallback & instant QR
+      const resId = createdRes.id || generateReservationId();
       const newReservation: Reservation = {
         id: resId,
         fieldId: field.id,
@@ -86,13 +129,41 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
         status: 'ABONADA_50',
         paymentMethodDeposit: paymentMethod,
         createdAt: new Date().toISOString(),
-        qrCodeValue: `SINTETICA-PAY-${resId}-${field.id}-${selectedDate}-${selectedTime}`
+        qrCodeValue: createdRes.qrCodeValue || `SINTETICA-PAY-${resId}`
       };
 
       saveReservation(newReservation);
       setIsProcessing(false);
       onSuccess(newReservation);
-    }, 1200);
+    } catch (err: any) {
+      console.error('Error submitting booking:', err);
+      // Fallback local creation if API temporary error
+      const resId = generateReservationId();
+      const endHourNum = parseInt(selectedTime.split(':')[0]) + 1;
+      const endTimeStr = `${endHourNum.toString().padStart(2, '0')}:00`;
+      const fallbackRes: Reservation = {
+        id: resId,
+        fieldId: field.id,
+        fieldName: field.name,
+        fieldType: field.type,
+        date: selectedDate,
+        startTime: selectedTime,
+        endTime: endTimeStr,
+        customerName,
+        customerPhone,
+        customerEmail,
+        totalPrice: field.pricePerHour,
+        depositAmount,
+        remainingAmount,
+        status: 'ABONADA_50',
+        paymentMethodDeposit: paymentMethod,
+        createdAt: new Date().toISOString(),
+        qrCodeValue: `SINTETICA-PAY-${resId}`
+      };
+      saveReservation(fallbackRes);
+      setIsProcessing(false);
+      onSuccess(fallbackRes);
+    }
   };
 
   return (
@@ -160,7 +231,7 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
                       const occupied = isTimeOccupied(t);
                       return (
                         <option key={t} value={t} disabled={occupied}>
-                          {t} - {parseInt(t.split(':')[0]) + 1}:00 {occupied ? '(OCUPADO)' : '(Disponible)'}
+                          {t} - {parseInt(t.split(':')[0]) + 1}:00 {occupied ? '(OCUPADO / MANTENIMIENTO)' : '(Disponible)'}
                         </option>
                       );
                     })}
