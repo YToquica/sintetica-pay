@@ -27,9 +27,25 @@ export default function HomePage() {
       .catch(err => console.error('Error cargando canchas desde la API:', err));
   }, []);
 
+  // Normalize string stripping accents (ú -> u) and special characters
+  const normalizeStr = (str: string) => {
+    return (str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '');
+  };
+
+  const matchesCategory = (fieldType: string, filterCategory: string) => {
+    if (filterCategory === 'TODAS') return true;
+    const normField = normalizeStr(fieldType);
+    const normCat = normalizeStr(filterCategory);
+    return normField === normCat || normField.includes(normCat) || normCat.includes(normField);
+  };
+
   const filteredFields = filterType === 'TODAS'
     ? fields
-    : fields.filter(f => f.type === filterType);
+    : fields.filter(f => matchesCategory(f.type, filterType));
 
   return (
     <div className="min-h-screen bg-slate-100/70 text-slate-900 flex flex-col font-sans">
@@ -88,8 +104,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Main Content Area (Smooth Scroll Target) */}
-      <main id="canchas" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1 space-y-8 scroll-mt-20">
+      {/* Main Content Area */}
+      <main id="canchas" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1 space-y-8">
         
         {/* Section Title & Filter Tabs */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
@@ -104,10 +120,10 @@ export default function HomePage() {
               <button
                 key={type}
                 onClick={() => setFilterType(type)}
-                className={`px-3 py-1.5 rounded-lg transition-all shrink-0 ${
+                className={`px-3.5 py-1.5 rounded-lg transition-all shrink-0 font-bold ${
                   filterType === type
-                    ? 'bg-white text-slate-900 shadow-sm font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-slate-900 text-emerald-400 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-300/60'
                 }`}
               >
                 {type}
@@ -117,15 +133,23 @@ export default function HomePage() {
         </div>
 
         {/* Fields Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredFields.map((field) => (
-            <FieldCard
-              key={field.id}
-              field={field}
-              onSelect={(f) => setSelectedField(f)}
-            />
-          ))}
-        </div>
+        {filteredFields.length === 0 ? (
+          <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-2">
+            <Trophy className="w-8 h-8 text-slate-300 mx-auto" />
+            <h3 className="text-sm font-bold text-slate-700">No hay canchas registradas en la categoría "{filterType}"</h3>
+            <p className="text-xs text-slate-500">Intenta seleccionando otra categoría o la opción "TODAS".</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredFields.map((field) => (
+              <FieldCard
+                key={field.id}
+                field={field}
+                onSelect={(f) => setSelectedField(f)}
+              />
+            ))}
+          </div>
+        )}
 
       </main>
 

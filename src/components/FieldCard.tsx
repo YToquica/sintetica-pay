@@ -28,6 +28,13 @@ export default function FieldCard({ field, onSelect }: FieldCardProps) {
     }).format(val);
   };
 
+  const formatType = (t: string) => {
+    if (t === 'FUTBOL_5' || t === 'Fútbol 5') return 'Fútbol 5';
+    if (t === 'FUTBOL_7' || t === 'Fútbol 7') return 'Fútbol 7';
+    if (t === 'FUTBOL_11' || t === 'Fútbol 11') return 'Fútbol 11';
+    return t;
+  };
+
   const featuresList = (field.features && field.features.length > 0) ? field.features : DEFAULT_FEATURES;
 
   return (
@@ -43,8 +50,8 @@ export default function FieldCard({ field, onSelect }: FieldCardProps) {
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-black/20" />
           
           {/* Badge Field Type */}
-          <div className="absolute top-3 left-3 bg-slate-900/90 backdrop-blur-md text-emerald-400 font-semibold text-xs px-3 py-1 rounded-full border border-slate-700/60 shadow-sm">
-            {field.type}
+          <div className="absolute top-3 left-3 bg-slate-900/90 backdrop-blur-md text-emerald-400 font-bold text-xs px-3 py-1 rounded-full border border-slate-700/60 shadow-sm">
+            {formatType(field.type)}
           </div>
 
           {/* Badge 50% Deposit Required */}
