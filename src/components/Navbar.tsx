@@ -37,48 +37,49 @@ export default function Navbar() {
 
   return (
     <header className="bg-slate-900 text-slate-100 border-b border-slate-800 sticky top-0 z-40 backdrop-blur-md bg-opacity-95">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-3">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 gap-2 sm:gap-3">
           
           {/* Logo & Brand Identity */}
-          <Link href={user ? '/admin' : '/'} className="flex items-center gap-2.5 group shrink-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-md group-hover:bg-emerald-500 transition-colors">
-              <Trophy className="w-5 h-5 sm:w-6 sm:h-6" />
+          <Link href={user ? '/admin' : '/'} className="flex items-center gap-2 sm:gap-2.5 group shrink min-w-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-md group-hover:bg-emerald-500 transition-colors shrink-0">
+              <Trophy className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <span className="font-bold text-base sm:text-lg text-white tracking-tight flex items-center gap-1">
+            <div className="min-w-0">
+              <span className="font-bold text-sm sm:text-lg text-white tracking-tight flex items-center gap-1 leading-tight">
                 Sintética<span className="text-emerald-400">Pay</span>
               </span>
-              <span className="text-[10px] sm:text-xs text-slate-400 block -mt-1 font-normal">
-                {user ? 'Panel de Administrador' : 'Gestión de Canchas & Abono 50%'}
+              <span className="text-[10px] sm:text-xs text-slate-400 hidden xs:block font-normal truncate max-w-[130px] sm:max-w-none">
+                {user ? 'Panel Administrador' : 'Gestión de Canchas & Abono 50%'}
               </span>
             </div>
           </Link>
 
           {/* Right Section: Admin Controls vs Customer Badges */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {user ? (
               // ADMIN NAVBAR: Panel Link & Logout
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <Link
                   href="/admin"
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all ${
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all ${
                     pathname === '/admin'
                       ? 'bg-emerald-950/90 text-emerald-400 border border-emerald-800/80'
                       : 'text-slate-300 hover:text-white hover:bg-slate-800'
                   }`}
                 >
-                  <LayoutDashboard className="w-4 h-4 text-emerald-400" />
-                  <span>Panel Dueño</span>
+                  <LayoutDashboard className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+                  <span className="hidden xs:inline sm:hidden">Panel</span>
+                  <span className="hidden sm:inline">Panel Dueño</span>
                 </Link>
 
-                <div className="flex items-center gap-2 bg-slate-800/90 border border-slate-700/80 pl-3 pr-1.5 py-1 rounded-full shadow-sm">
+                <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-800/90 border border-slate-700/80 pl-2 sm:pl-3 pr-1 py-1 rounded-full shadow-sm">
                   <span className="text-[11px] text-emerald-400 font-semibold max-w-[130px] truncate hidden md:inline">
                     {user.email}
                   </span>
                   <button
                     onClick={handleLogout}
-                    className="bg-slate-700 hover:bg-red-600 text-white p-1.5 rounded-full transition-colors flex items-center gap-1 px-2.5 text-xs font-medium"
+                    className="bg-slate-700 hover:bg-red-600 text-white p-1.5 rounded-full transition-colors flex items-center gap-1 px-2 sm:px-2.5 text-xs font-medium"
                     title="Cerrar Sesión"
                   >
                     <span className="hidden sm:inline">Salir</span>
@@ -96,7 +97,7 @@ export default function Navbar() {
 
                 <Link
                   href="/login"
-                  className="flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 px-3.5 py-1.5 rounded-full font-semibold transition-all shadow-sm"
+                  className="flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 px-3 sm:px-3.5 py-1.5 rounded-full font-semibold transition-all shadow-sm"
                   title="Acceso Administrador"
                 >
                   <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
