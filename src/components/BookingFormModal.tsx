@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Field, Reservation, PaymentMethodDeposit } from '@/lib/types';
+import { Field, Reservation } from '@/lib/types';
 import { getStoredReservations, saveReservation, generateReservationId } from '@/lib/store';
-import { X, Calendar, Clock, User, CreditCard, ShieldCheck, Check, AlertCircle, ExternalLink, Smartphone, Building2 } from 'lucide-react';
+import { X, Calendar, Clock, User, ShieldCheck, AlertCircle, ExternalLink, Lock } from 'lucide-react';
 
 interface BookingFormModalProps {
   field: Field | null;
@@ -24,7 +24,6 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
   const [customerName, setCustomerName] = useState<string>('');
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [customerEmail, setCustomerEmail] = useState<string>('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodDeposit>('Nequi');
   
   const [dbReservations, setDbReservations] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -99,7 +98,7 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
           customerName,
           customerPhone,
           customerEmail,
-          paymentMethodDeposit: paymentMethod,
+          paymentMethodDeposit: 'Mercado Pago',
         }),
       });
 
@@ -126,19 +125,19 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
         depositAmount,
         remainingAmount,
         status: 'ABONADA_50',
-        paymentMethodDeposit: paymentMethod,
+        paymentMethodDeposit: 'Mercado Pago',
         createdAt: new Date().toISOString(),
         qrCodeValue: createdRes.qrCodeValue || `SINTETICA-PAY-${resId}`
       };
 
       saveReservation(newReservation);
 
-      // 2. ALL online payment options (Nequi, PSE, Cards, Mercado Pago) generate Mercado Pago Preference
+      // 2. Mercado Pago Preference API Endpoint
       const mpRes = await fetch('/api/checkout/preference', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: `Abono 50% Cancha Sintética - ${field.name} (${paymentMethod})`,
+          title: `Abono 50% Cancha Sintética - ${field.name}`,
           unitPrice: depositAmount,
           reservationId: resId,
           customerName,
@@ -148,8 +147,8 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
 
       if (mpRes.ok) {
         const mpData = await mpRes.json();
-        // Redirect directly to Mercado Pago payment gateway (Nequi / PSE / Card)
-        if (mpData.init_point && !mpData.simulated) {
+        // Redirect directly to Mercado Pago Gateway checkout
+        if (mpData.init_point) {
           window.location.href = mpData.init_point;
           return;
         }
@@ -177,7 +176,7 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
         depositAmount,
         remainingAmount,
         status: 'ABONADA_50',
-        paymentMethodDeposit: paymentMethod,
+        paymentMethodDeposit: 'Mercado Pago',
         createdAt: new Date().toISOString(),
         qrCodeValue: `SINTETICA-PAY-${resId}`
       };
@@ -188,11 +187,11 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in duration-200 my-4">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
         
-        {/* Modal Header */}
-        <div className="bg-slate-900 text-white p-5 flex items-center justify-between border-b border-slate-800">
+        {/* Modal Header (Sticky Top) */}
+        <div className="bg-slate-900 text-white p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 shrink-0">
           <div>
             <div className="flex items-center gap-2">
               <span className="bg-emerald-600 text-white text-[10px] uppercase font-bold px-2 py-0.5 rounded-full">
@@ -200,18 +199,18 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
               </span>
               <span className="text-xs text-slate-400">{field.type}</span>
             </div>
-            <h2 className="text-lg font-bold text-white mt-1">{field.name}</h2>
+            <h2 className="text-base sm:text-lg font-bold text-white mt-1">{field.name}</h2>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            className="text-slate-400 hover:text-white p-1.5 rounded-full hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Modal Form */}
-        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+        {/* Modal Form (Scrollable Area) */}
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
           
           {errorMsg && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-xl flex items-center gap-2">
@@ -311,59 +310,23 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
             </div>
           </div>
 
-          {/* Payment Method for 50% Deposit */}
-          <div className="space-y-3 border-t border-slate-100 pt-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <CreditCard className="w-4 h-4 text-emerald-600" />
-                3. Medio de Pago del Abono (50%: {formatCOP(depositAmount)})
-              </h3>
-              <span className="text-[10px] text-sky-600 bg-sky-50 font-bold px-2 py-0.5 rounded-full border border-sky-200 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" />
-                Vía Mercado Pago
-              </span>
+          {/* Clean Mercado Pago Info Section */}
+          <div className="space-y-2 border-t border-slate-100 pt-4">
+            <div className="bg-emerald-50/80 border border-emerald-200/80 p-3.5 rounded-2xl flex items-start gap-3 text-xs">
+              <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                <Lock className="w-4 h-4" />
+              </div>
+              <div className="space-y-1">
+                <span className="font-bold text-emerald-900 block">Pago Seguro con Mercado Pago</span>
+                <p className="text-emerald-800 text-[11px] leading-relaxed">
+                  Al hacer clic en pagar, serás redirigido a la pasarela oficial donde podrás abonar con <strong>Nequi, PSE, Tarjeta de Crédito/Débito o Efectivo</strong>.
+                </p>
+              </div>
             </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { name: 'Nequi', icon: Smartphone, desc: 'Pago instantáneo por Nequi' },
-                { name: 'PSE', icon: Building2, desc: 'Débito desde tu banco' },
-                { name: 'Tarjeta de Crédito', icon: CreditCard, desc: 'Visa, Mastercard, Amex' },
-                { name: 'Mercado Pago', icon: ExternalLink, desc: 'Saldo o cuotas Mercado Pago' },
-              ].map((pm) => {
-                const IconComponent = pm.icon;
-                return (
-                  <button
-                    type="button"
-                    key={pm.name}
-                    onClick={() => setPaymentMethod(pm.name as PaymentMethodDeposit)}
-                    className={`p-3 rounded-xl border text-xs font-medium flex items-center justify-between text-left transition-all ${
-                      paymentMethod === pm.name
-                        ? 'border-emerald-600 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-500/20 font-bold'
-                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <IconComponent className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>{pm.name}</span>
-                      </div>
-                      <span className="text-[10px] text-slate-400 block font-normal">{pm.desc}</span>
-                    </div>
-                    {paymentMethod === pm.name && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-
-            <p className="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Al presionar pagar, serás redirigido a la pasarela segura de <strong>Mercado Pago</strong> para procesar tu abono por <strong>{paymentMethod}</strong>.</span>
-            </p>
           </div>
 
           {/* Order Summary & Split Payment Box */}
-          <div className="bg-slate-900 text-slate-100 rounded-2xl p-4 space-y-3">
+          <div className="bg-slate-900 text-slate-100 rounded-2xl p-4 space-y-2.5">
             <div className="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-slate-800">
               <span>Resumen Financiero de la Reserva:</span>
               <span className="font-semibold text-white">{field.name}</span>
@@ -390,7 +353,7 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
             </div>
           </div>
 
-          {/* Submit Button */}
+          {/* Direct Mercado Pago Submit Button */}
           <button
             type="submit"
             disabled={isProcessing}
@@ -399,8 +362,8 @@ export default function BookingFormModal({ field, onClose, onSuccess }: BookingF
             {isProcessing ? (
               <span>Redirigiendo a Mercado Pago para abonar {formatCOP(depositAmount)}...</span>
             ) : (
-              <span className="flex items-center gap-1.5">
-                <span>Pagar Abono de {formatCOP(depositAmount)} por {paymentMethod}</span>
+              <span className="flex items-center gap-2">
+                <span>Pagar Abono de {formatCOP(depositAmount)} con Mercado Pago</span>
                 <ExternalLink className="w-4 h-4" />
               </span>
             )}
