@@ -88,8 +88,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1 space-y-8">
+      {/* Main Content Area (Smooth Scroll Target) */}
+      <main id="canchas" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1 space-y-8 scroll-mt-20">
         
         {/* Section Title & Filter Tabs */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
@@ -99,12 +99,12 @@ export default function HomePage() {
           </div>
 
           {/* Filter Pills */}
-          <div className="flex items-center gap-1.5 bg-slate-200/80 p-1 rounded-xl text-xs font-medium">
+          <div className="flex items-center gap-1.5 bg-slate-200/80 p-1 rounded-xl text-xs font-medium overflow-x-auto max-w-full">
             {['TODAS', 'Fútbol 5', 'Fútbol 7', 'Fútbol 11'].map((type) => (
               <button
                 key={type}
                 onClick={() => setFilterType(type)}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                className={`px-3 py-1.5 rounded-lg transition-all shrink-0 ${
                   filterType === type
                     ? 'bg-white text-slate-900 shadow-sm font-semibold'
                     : 'text-slate-600 hover:text-slate-900'
